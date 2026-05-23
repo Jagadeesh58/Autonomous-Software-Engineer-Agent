@@ -8,13 +8,13 @@ Built with **Groq (Llama 3.3 70B)**
 
 ## What it can do
 
-- ✅ Write Python files and run them
-- ✅ Fix its own bugs automatically (self-healing)
-- ✅ Install any Python package
-- ✅ Read and write files
-- ✅ Commit code to Git
-- ✅ Handle multi-step tasks autonomously
-- ✅ Log every action to session.log
+-  Write Python files and run them
+-  Fix its own bugs automatically (self-healing)
+-  Install any Python package
+-  Read and write files
+-  Commit code to Git
+-  Handle multi-step tasks autonomously
+-  Log every action to session.log
 
 ---
 
