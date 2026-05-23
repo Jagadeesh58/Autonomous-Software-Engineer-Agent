@@ -1,4 +1,4 @@
-# 🤖 Autonomous Software Engineer Agent
+# Autonomous Software Engineer Agent
 
 An AI-powered agent that can write code, fix bugs, run scripts, install packages, and commit to Git — all by itself.
 
