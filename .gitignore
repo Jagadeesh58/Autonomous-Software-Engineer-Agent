@@ -1,0 +1,6 @@
+.env
+venv/
+__pycache__/
+*.pyc
+session.log
+_temp_exec.py
