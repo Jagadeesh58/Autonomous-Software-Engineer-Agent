@@ -2,7 +2,7 @@
 
 An AI-powered agent that can write code, fix bugs, run scripts, install packages, and commit to Git — all by itself.
 
-Built with **Groq (Llama 3.3 70B)** — completely free.
+Built with **Groq (Llama 3.3 70B)** 
 
 ---
 
