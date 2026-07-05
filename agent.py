@@ -1,24 +1,18 @@
-"""
-agent.py - Core agent loop for the Autonomous Software Engineer.
-Uses Groq (Llama 3.3 70B) with ReAct pattern.
-"""
-
-import os
-import json
-from datetime import datetime
 from dotenv import load_dotenv
+load_dotenv()
 
-# IMPORTANT: override=True ensures fresh .env values replace stale env vars
-load_dotenv(override=True)
+from openai import OpenAI
+from tools import (run_shell, read_file, write_file,
+                   execute_code, do_search,
+                   install_package, git_commit, TOOL_SCHEMAS)
+import json
+import os
+from datetime import datetime
 
-from groq import Groq
-from tools import TOOL_MAP, TOOL_SCHEMAS
-
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-LOG_FILE = os.path.join(BASE_DIR, "session.log")
-
-# Initialize Groq client
-client = Groq(api_key=os.environ.get("GROQ_API_KEY"))
+client = OpenAI(
+    api_key=os.environ.get("OPENROUTER_API_KEY"),
+    base_url="https://openrouter.ai/api/v1"
+)
 
 SYSTEM_PROMPT = """You are an expert software engineer agent.
 When given a task, you must:
@@ -27,80 +21,46 @@ When given a task, you must:
 3. VERIFY - run the code to confirm it works
 4. REPORT - summarize what you did
 
-Available tools:
-- run_shell: Run any shell command
-- read_file: Read a file's contents
-- write_file: Write content to a file
-- append_file: Append content to a file
-- list_directory: List files in a directory
-- execute_code: Run Python code directly
-- do_search: Search the web for info
-- install_package: Install Python packages via pip
-- git_commit: Stage and commit all changes
-
 Rules:
 - Always write clean, working code
-- Always run code after writing to verify it works
-- If code fails, read the error and fix it (max 3 retries)
-- Use list_directory first to understand project structure
+- Always run code after writing it to verify
+- If something fails, fix it and try again
+- Use write_file for saving code to files
+- Use execute_code for running quick Python code
+- Use run_shell for system commands
+- Use read_file to check file contents
+- Use install_package to install any library
+- Use git_commit to save completed work
 """
 
-MAX_CONTEXT_MESSAGES = 40  # Prevent token overflow
+TOOL_MAP = {
+    "run_shell": run_shell,
+    "read_file": read_file,
+    "write_file": write_file,
+    "execute_code": execute_code,
+    "install_package": install_package,
+    "git_commit": git_commit
+}
 
-
-def log_entry(session_log, entry):
-    """Write a timestamped log entry."""
+def log(entry: str):
     timestamp = datetime.now().strftime("%H:%M:%S")
     line = f"[{timestamp}] {entry}"
-    session_log.append(line)
-    with open(LOG_FILE, "a", encoding="utf-8") as f:
+    with open("session.log", "a") as f:
         f.write(line + "\n")
 
-
-def serialize_tool_calls(tool_calls):
-    """Convert Groq SDK tool_call objects to plain dicts."""
-    if not tool_calls:
-        return []
-    result = []
-    for tc in tool_calls:
-        result.append({
-            "id": tc.id,
-            "type": "function",
-            "function": {
-                "name": tc.function.name,
-                "arguments": tc.function.arguments,
-            }
-        })
-    return result
-
-
-def trim_messages(messages):
-    """Keep messages within token budget."""
-    if len(messages) <= MAX_CONTEXT_MESSAGES:
-        return messages
-    # Always keep first message (the task)
-    return [messages[0]] + messages[-(MAX_CONTEXT_MESSAGES - 1):]
-
-
-def run_agent(task, max_steps=15, search_first=False):
-    """Main agent loop."""
-    session_log = []
+def run_agent(task: str, max_steps: int = 15, search_first: bool = False):
     messages = []
 
-    # Log new session
-    with open(LOG_FILE, "a", encoding="utf-8") as f:
+    with open("session.log", "a") as f:
         f.write(f"\n{'='*50}\n")
         f.write(f"NEW SESSION: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
         f.write(f"TASK: {task}\n")
         f.write(f"{'='*50}\n")
 
-    # Optional web search before starting
     if search_first:
-        from tools import do_search
-        print("\n>> Searching web for context...")
+        print(f"\n🔍 Searching web for context...")
         search_result = do_search(task)
-        log_entry(session_log, f"WEB SEARCH: {task[:100]}")
-        log_entry(session_log, f"SEARCH RESULT: {search_result[:200]}")
+        log(f"WEB SEARCH: {task[:100]}")
         messages.append({
             "role": "user",
             "content": f"Task: {task}\n\nWeb search results:\n{search_result}"
@@ -108,9 +68,8 @@ def run_agent(task, max_steps=15, search_first=False):
     else:
         messages.append({"role": "user", "content": task})
 
-    print(f"\nTask: {task}")
-    print("=" * 50)
-    log_entry(session_log, f"TASK: {task[:100]}")
+    print(f"\nTask: {task}\n" + "="*50)
+    log(f"TASK STARTED: {task[:100]}")
 
     step = 0
     error_count = 0
@@ -118,125 +77,118 @@ def run_agent(task, max_steps=15, search_first=False):
     while step < max_steps:
         step += 1
         print(f"\n--- Step {step} ---")
-        log_entry(session_log, f"STEP {step}")
+        log(f"STEP {step} STARTED")
 
-        # Trim context if too long
-        trimmed = trim_messages(messages)
-
-        # Call LLM
         try:
             response = client.chat.completions.create(
-                model="llama-3.3-70b-versatile",
-                messages=[{"role": "system", "content": SYSTEM_PROMPT}] + trimmed,
+                model="meta-llama/llama-3.1-8b-instruct",
+                messages=[{"role": "system", "content": SYSTEM_PROMPT}] + messages,
                 tools=TOOL_SCHEMAS,
                 tool_choice="auto",
-                max_tokens=4096,
+                max_tokens=2048
             )
         except Exception as e:
-            error_str = str(e)
-            # Groq sometimes fails to generate valid tool calls — retry without tools
-            if "tool_use_failed" in error_str or "400" in error_str:
-                print("  >> Tool call failed, retrying without tools...")
-                log_entry(session_log, "TOOL_USE_FAILED - retrying without tools")
-                try:
-                    response = client.chat.completions.create(
-                        model="llama-3.3-70b-versatile",
-                        messages=[{"role": "system", "content": SYSTEM_PROMPT}] + trimmed,
-                        max_tokens=4096,
-                    )
-                except Exception as e2:
-                    print(f">> API Error: {e2}")
-                    log_entry(session_log, f"API ERROR: {str(e2)}")
-                    break
-            else:
-                print(f">> API Error: {e}")
-                log_entry(session_log, f"API ERROR: {error_str}")
-                break
-
-        msg = response.choices[0].message
-
-        # Store assistant message with serialized tool_calls
-        messages.append({
-            "role": "assistant",
-            "content": msg.content or "",
-            "tool_calls": serialize_tool_calls(msg.tool_calls),
-        })
-
-        # Print agent thinking
-        if msg.content:
-            print(f"Agent: {msg.content[:300]}")
-            log_entry(session_log, f"AGENT: {msg.content[:300]}")
-
-        # No tool calls = agent is done
-        if not msg.tool_calls:
-            print(f"\n[DONE] {msg.content}")
-            log_entry(session_log, f"COMPLETED: {(msg.content or '')[:300]}")
+            print(f"❌ API Error: {e}")
+            log(f"API ERROR: {str(e)}")
             break
 
-        # Execute each tool call
-        for tool_call in msg.tool_calls:
-            name = tool_call.function.name
+        msg = response.choices[0].message
+        content = getattr(msg, "content", None)
+        if content is None and isinstance(msg, dict):
+            content = msg.get("content", "")
+        tool_calls = getattr(msg, "tool_calls", None)
+        if tool_calls is None and isinstance(msg, dict):
+            tool_calls = msg.get("tool_calls", [])
+        tool_calls = tool_calls or []
 
-            # Parse arguments
-            try:
-                args = json.loads(tool_call.function.arguments)
-            except json.JSONDecodeError as e:
-                result = f"Error: Bad arguments: {e}"
-                print(f"  [{name}] {result}")
-                messages.append({
-                    "role": "tool",
-                    "tool_call_id": tool_call.id,
-                    "content": result,
-                })
-                continue
+        messages.append({
+            "role": "assistant",
+            "content": content or "",
+            "tool_calls": tool_calls
+        })
 
-            print(f"  [{name}] {str(args)[:150]}")
-            log_entry(session_log, f"TOOL: {name} | ARGS: {str(args)[:150]}")
+        if content:
+            print(f"Agent thinking: {content[:200]}")
+            log(f"THINKING: {content[:200]}")
 
-            # Run the tool
-            fn = TOOL_MAP.get(name)
-            if fn:
-                result = fn(**args)
+        if not tool_calls:
+            print(f"\n✅ DONE!\nAgent: {content}")
+            log(f"TASK COMPLETED: {str(content)[:200]}")
+            break
+
+        for tool_call in tool_calls:
+            raw_args = None
+            if hasattr(tool_call, "function"):
+                raw_args = getattr(tool_call.function, "arguments", None)
+                name = getattr(tool_call.function, "name", None)
+                tool_call_id = getattr(tool_call, "id", None)
+            elif isinstance(tool_call, dict):
+                func = tool_call.get("function", {})
+                raw_args = func.get("arguments")
+                name = func.get("name")
+                tool_call_id = tool_call.get("id")
             else:
-                result = f"Error: Unknown tool '{name}'"
+                name = None
+                tool_call_id = None
 
-            print(f"  Result: {str(result)[:250]}")
-            log_entry(session_log, f"RESULT: {str(result)[:250]}")
+            try:
+                args = json.loads(raw_args) if isinstance(raw_args, str) else raw_args or {}
+            except json.JSONDecodeError:
+                args = {"input": raw_args}
 
-            # Self-healing: detect errors
-            error_words = ["error", "traceback", "exception", "failed"]
-            is_error = any(w in str(result).lower() for w in error_words)
+            name = name or "unknown_tool"
 
-            if is_error:
+            print(f"\n🔧 Tool: {name}")
+            print(f"   Input: {str(args)[:150]}")
+            log(f"TOOL: {name} | INPUT: {str(args)[:150]}")
+
+            fn = TOOL_MAP.get(name)
+            # Normalize common argument names produced by different tool schemas
+            if isinstance(args, dict):
+                # some models emit 'input' instead of the expected 'code'
+                if "input" in args and "code" not in args:
+                    args["code"] = args.pop("input")
+                # map 'file_name' to 'path' when present
+                if "file_name" in args and "path" not in args:
+                    args["path"] = args.pop("file_name")
+            try:
+                result = fn(**args) if fn else "Tool not found"
+            except TypeError as e:
+                # Provide a clearer error message and attempt fallback by passing
+                # the whole args dict as a single 'input' parameter if accepted.
+                err_text = f"Error calling tool {name}: {e}"
+                try:
+                    result = fn(args)
+                except Exception:
+                    result = err_text
+
+            print(f"   Result: {str(result)[:200]}")
+            log(f"RESULT: {str(result)[:200]}")
+
+            tool_message = {
+                "role": "tool",
+                "name": name,
+                "content": result
+            }
+            if tool_call_id is not None:
+                tool_message["tool_call_id"] = tool_call_id
+
+            if any(word in str(result).lower() for word in ["error", "traceback", "exception", "failed"]):
                 error_count += 1
-                print(f"  !! Error detected ({error_count}/3)")
-                log_entry(session_log, f"ERROR ({error_count}/3)")
+                print(f"   ⚠️ Error detected (attempt {error_count}/3)")
+                log(f"ERROR DETECTED (attempt {error_count}/3)")
 
                 if error_count >= 3:
-                    print("  !! Max retries reached")
-                    log_entry(session_log, "MAX RETRIES")
-                    messages.append({
-                        "role": "tool",
-                        "tool_call_id": tool_call.id,
-                        "content": result + "\n\nYou have failed 3 times. Explain what went wrong.",
-                    })
+                    tool_message["content"] = result + "\n\nYou have failed 3 times. Please explain what went wrong."
                 else:
-                    messages.append({
-                        "role": "tool",
-                        "tool_call_id": tool_call.id,
-                        "content": result + "\n\nThis failed. Analyze the error and try differently.",
-                    })
+                    tool_message["content"] = result + "\n\nThis failed. Please analyze the error and try a different approach."
             else:
                 error_count = 0
-                messages.append({
-                    "role": "tool",
-                    "tool_call_id": tool_call.id,
-                    "content": result,
-                })
+
+            messages.append(tool_message)
 
     if step >= max_steps:
-        print("\n!! Max steps reached.")
-        log_entry(session_log, "MAX STEPS")
+        print("\n⚠️ Max steps reached.")
+        log("MAX STEPS REACHED")
 
-    print(f"\nSession log: {LOG_FILE}")
-    return session_log
+    print(f"\n📋 Session log saved to session.log")

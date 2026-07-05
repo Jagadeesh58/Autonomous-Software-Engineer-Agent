@@ -65,11 +65,11 @@ pip install -r requirements.txt
 Create a `.env` file in the project root:
 
 ```
-GROQ_API_KEY=your_groq_api_key_here
-SERPER_API_KEY=your_serper_api_key_here
+GEMINI_API_KEY=your_gemini_key_here
+SERPER_API_KEY=your_serper_key_here
 ```
 
-- Get a Groq API key from [console.groq.com](https://console.groq.com)
+- Get a openrouter API KEY from (openrouter.ai)
 - Get a Serper API key from [serper.dev](https://serper.dev)
 
 ### 5. Run the agent
