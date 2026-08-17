@@ -1,1 +1,1 @@
-    return even_nums
+print(get_even_numbers(10))
