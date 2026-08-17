@@ -76,6 +76,12 @@ SERPER_API_KEY=your_serper_key_here
 
 ```bash
 python cli.py
+
+# Running the main script
+
+```bash
+python main.py
+```
 ```
 
 ---
