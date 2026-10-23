@@ -4,3 +4,6 @@ __pycache__/
 *.pyc
 session.log
 _temp_exec.py
+*.out.txt
+notes.txt
+_test_sample.txt

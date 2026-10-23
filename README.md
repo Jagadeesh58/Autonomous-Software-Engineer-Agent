@@ -1,38 +1,39 @@
 # 🤖 Autonomous Software Engineer Agent
 
-An AI-powered agent that can write code, fix bugs, run scripts, install packages, search the web, and commit to Git — all by itself.
+An autonomous AI software engineer agent that can write code, fix bugs, run scripts, install packages, search the web, and commit to Git — completely on its own.
 
-Built with **Groq (Llama 3.3 70B)** + **Python**
+Built with **Python**, the **ReAct (Reason + Act)** pattern, and flexible LLM providers (**OpenRouter**, **Groq**, or **OpenAI**).
 
 ---
 
 ## ✨ Features
 
-- ✍️ Write Python files and run them
-- 🔄 Fix its own bugs automatically (self-healing, up to 3 retries)
-- 📦 Install any Python package via pip
-- 📖 Read and write files with safety guards
-- 📂 List directory contents to explore projects
-- 🔍 Search the web for documentation and solutions
-- 📌 Commit code to Git
-- 🧠 Context window management for long tasks
-- 📋 Full session logging to `session.log`
+- ✍️ **Write & Execute Code**: Writes Python scripts and runs them in a sandboxed subprocess.
+- 🔄 **Self-Healing Loop**: Automatically detects tracebacks and runtime errors, analyzing and self-correcting up to 3 times.
+- 📦 **Automated Package Management**: Installs required Python packages on the fly using `pip`.
+- 📖 **Safe File Operations**: Reads, writes, appends, and inspects project files with size and path guards.
+- 📂 **Directory Exploration**: Inspects project structures and file listings.
+- 🔍 **Real-Time Web Search**: Queries Google via Serper API for documentation and up-to-date solutions.
+- 📌 **Git Version Control**: Automatically stages and commits verified code changes.
+- 🧠 **Context Management**: Prevents token overflow by pruning and summarizing long execution histories.
+- 📋 **Audit Logging**: Every action, tool call, and thought is logged with timestamps in `session.log`.
 
 ---
 
 ## 📁 Project Structure
 
 ```
-agent/
-├── agent.py          # Core agent loop (ReAct pattern)
-├── tools.py          # Tool implementations + schemas
-├── cli.py            # Interactive CLI with Rich
-├── app.py            # Sample Flask app (agent-generated)
-├── .env              # API keys (not committed)
-├── .gitignore         # Git ignore rules
-├── requirements.txt  # Python dependencies
-├── session.log       # Auto-generated session log
-└── README.md         # This file
+Autonomous-Software-Engineer-Agent/
+├── agent.py          # Core agent ReAct loop & LLM orchestration
+├── tools.py          # 9 tool implementations & JSON schemas
+├── cli.py            # Rich interactive terminal interface
+├── main.py           # Top-level entry point (interactive or batch mode)
+├── test_suite.py     # Automated unit tests for tools & agent logic
+├── requirements.txt  # Core Python dependencies
+├── .env              # API keys & configuration (not committed)
+├── .gitignore        # Git ignore rules
+├── session.log       # Timestamped session execution audit log
+└── README.md         # Project documentation
 ```
 
 ---
@@ -43,15 +44,19 @@ agent/
 
 ```bash
 git clone https://github.com/Jagadeesh58/Autonomous-Software-Engineer-Agent.git
-cd agent
+cd Autonomous-Software-Engineer-Agent
 ```
 
-### 2. Create a virtual environment
+### 2. Create and activate a virtual environment
 
 ```bash
+# Windows
 python -m venv venv
-venv\Scripts\activate       # Windows
-# source venv/bin/activate  # macOS/Linux
+venv\Scripts\activate
+
+# macOS/Linux
+python3 -m venv venv
+source venv/bin/activate
 ```
 
 ### 3. Install dependencies
@@ -60,29 +65,25 @@ venv\Scripts\activate       # Windows
 pip install -r requirements.txt
 ```
 
-### 4. Set up your API keys
+### 4. Configure API Keys
 
 Create a `.env` file in the project root:
 
-```
-GEMINI_API_KEY=your_gemini_key_here
+```env
+# Choose your preferred LLM provider (OpenRouter, Groq, or OpenAI):
+OPENROUTER_API_KEY=your_openrouter_api_key_here
+
+# Optional: Serper API key for real-time web search capabilities
 SERPER_API_KEY=your_serper_key_here
+
+# Optional: Override default model or API endpoint
+# AGENT_MODEL=meta-llama/llama-3.1-8b-instruct
+# OPENAI_BASE_URL=https://openrouter.ai/api/v1
 ```
 
-- Get a openrouter API KEY from (openrouter.ai)
-- Get a Serper API key from [serper.dev](https://serper.dev)
-
-### 5. Run the agent
-
-```bash
-python cli.py
-
-# Running the main script
-
-```bash
-python main.py
-```
-```
+- **OpenRouter** (Default): Get an API key from [openrouter.ai](https://openrouter.ai)
+- **Groq** (Alternative): Set `GROQ_API_KEY=your_key` from [console.groq.com](https://console.groq.com)
+- **Serper API**: Get a free search key from [serper.dev](https://serper.dev)
 
 ---
 
@@ -90,71 +91,102 @@ python main.py
 
 ### Interactive Mode
 
+Launch the Rich-powered interactive terminal:
+
 ```bash
 python cli.py
 ```
-
-Type tasks like:
-- `Create a Flask REST API with CRUD operations for a todo app`
-- `Fix the bug in buggy.py`
-- `search How to implement JWT authentication in Flask` (web search first)
-
-### Non-Interactive Mode
-
+*or*
 ```bash
-python cli.py "Create a calculator app in Python"
+python main.py
 ```
 
-### CLI Options
+Try commands and prompts like:
+- `Create a Flask REST API with CRUD operations for a todo app and test it`
+- `Fix the bug in buggy.py and verify it works`
+- `search How to implement rate limiting in Python`
+- `log` — View recent entries from `session.log`
+- `help` — Show command help
+- `exit` — Quit the session
+
+### Non-Interactive (Single Task) Mode
+
+Run a single task directly from the command line:
+
+```bash
+python cli.py "Create a calculator app in Python and test all arithmetic functions"
+```
+*or*
+```bash
+python main.py "Create a script that calculates fibonacci numbers and verify output"
+```
+
+### CLI Flags
 
 | Flag | Description |
 |------|-------------|
-| `--search` | Enable web search before every task |
-| `--steps N` | Set max steps per task (default: 15) |
-
-### In-App Commands
-
-| Command | Description |
-|---------|-------------|
-| `search <task>` | Search the web first, then execute the task |
-| `log` | View the last 50 lines of session log |
-| `help` | Show help / commands |
-| `exit` | Quit the agent |
+| `--search` | Perform web search for context before starting the task |
+| `--steps N` | Maximum number of ReAct loop iterations (default: 15) |
 
 ---
 
 ## 🛠️ Available Tools
 
-| Tool | Description |
-|------|-------------|
-| `run_shell` | Run any shell command |
-| `read_file` | Read file contents (max 100 KB) |
-| `write_file` | Write content to a file |
-| `append_file` | Append content to a file |
-| `list_directory` | List files and folders |
-| `execute_code` | Run Python code directly |
-| `do_search` | Search the web via Serper API |
-| `install_package` | Install Python packages via pip |
-| `git_commit` | Stage and commit all changes |
+The agent has access to 9 tools defined in `tools.py`:
+
+| Tool | Function | Description |
+|------|----------|-------------|
+| `run_shell` | Shell Execution | Run system shell commands and capture stdout/stderr safely |
+| `read_file` | File Inspection | Read file contents (up to 100 KB) with path validation |
+| `write_file` | File Creation | Create or overwrite files, automatically creating directories |
+| `append_file` | File Update | Append text content to existing files |
+| `list_directory` | Directory Listing | Explore project directories, subfolders, and file sizes |
+| `execute_code` | Code Runner | Execute isolated Python scripts using the active virtual environment |
+| `do_search` | Web Search | Query Google via Serper API for documentation and solutions |
+| `install_package` | Package Installer | Install external packages into the active environment via pip |
+| `git_commit` | Version Control | Stage all workspace changes and create a Git commit |
 
 ---
 
 ## 🧠 How It Works
 
-The agent follows a **ReAct (Reason + Act)** loop:
+The agent implements a cyclic **ReAct (Reason + Act)** pattern:
 
 ```
-User Task → LLM Plans → Calls Tools → Reads Results → Plans Next Step → ...→ Done
+User Prompt
+    │
+    ▼
+┌───────────────────────────────────────────────┐
+│ 1. PLAN: Break task into sequential steps     │
+│ 2. ACT: Select tool and execute with params   │
+│ 3. OBSERVE: Analyze execution results         │
+│ 4. SELF-HEAL: On error, diagnose & retry (≤3) │
+└───────────────────────────────────────────────┘
+    │
+    ▼
+Task Completed & Summary Reported
 ```
 
-1. **PLAN** — The LLM breaks the task into steps
-2. **ACT** — Executes each step using tools
-3. **VERIFY** — Runs code to confirm it works
-4. **SELF-HEAL** — If something fails, analyzes the error and retries (up to 3 times)
-5. **REPORT** — Summarizes what was done
+1. **Plan**: Formulates an execution strategy based on the system prompt instructions.
+2. **Act**: The LLM emits structured tool calls (`TOOL_SCHEMAS`) mapped to real Python functions (`TOOL_MAP`).
+3. **Verify**: Always executes written code to verify correctness before proceeding.
+4. **Self-Heal**: If a tool returns an error or traceback, the feedback is injected into the next prompt, giving the agent up to 3 opportunities to diagnose and rectify the issue.
+5. **Report**: Summarizes all actions taken and files modified.
+
+---
+
+## 🧪 Running Tests
+
+Execute the automated test suite:
+
+```bash
+python -m unittest test_suite.py
+```
+
+All 9 unit tests verify tool schema alignment, file operations, subprocess sandboxing, parameter normalization, and context trimming.
 
 ---
 
 ## 📄 License
 
-MIT License — feel free to use and modify.
+MIT License — free to use and modify for your own projects.

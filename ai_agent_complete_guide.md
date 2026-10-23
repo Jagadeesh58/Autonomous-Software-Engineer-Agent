@@ -45,7 +45,7 @@ AI Agent:     You ask → AI thinks → AI does something → checks result → 
 
 ### Part 3: Tools (Functions)
 - Real Python functions the agent can call
-- In your project: run_shell, read_file, write_file, execute_code, install_package, git_commit
+- In your project: 9 tools (run_shell, read_file, write_file, append_file, list_directory, execute_code, do_search, install_package, git_commit)
 - Agent says "call this tool" → you run it → result goes back to agent
 
 ### Part 4: Planning (System Prompt)
@@ -378,8 +378,8 @@ Very long tasks hit the context window limit. Agent may lose track of early step
 **4. Rate Limits**
 Groq free tier limits how many requests per minute.
 
-**5. No Internet Access**
-Agent can't browse websites (web_search was removed due to Groq tool name issues).
+**5. Search Rate Limits**
+Real-time web search requires a Serper API key (SERPER_API_KEY) and is subject to search quota.
 
 **6. Sequential Only**
 Agent does one thing at a time. Can't run parallel tasks.
@@ -426,7 +426,7 @@ Groq is an AI inference service that runs open-source models like Llama extremel
 No. I used a pre-trained model (Llama 3.3 70B trained by Meta) via the Groq API. My work was in building the agent architecture around it — the tool system, planning loop, and self-healing logic.
 
 **Q: What tools does your agent have?**
-Six tools: run_shell (executes Windows CMD commands), read_file (reads file contents), write_file (creates/updates files), execute_code (runs Python code in a temp file), install_package (pip installs libraries), and git_commit (commits to git using gitpython).
+Nine tools: run_shell (executes shell commands), read_file (reads file contents), write_file (creates/overwrites files), append_file (appends to files), list_directory (lists directory entries), execute_code (runs Python code in an isolated subprocess), do_search (searches the web via Serper API), install_package (pip installs libraries), and git_commit (stages and commits to git).
 
 **Q: What is a system prompt?**
 A system prompt is a special instruction given to the AI before the conversation starts. It defines the AI's role, behavior rules, and constraints. In my agent, the system prompt tells the AI to behave as a software engineer and follow the PLAN→ACT→VERIFY→REPORT pattern.

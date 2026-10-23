@@ -2,8 +2,9 @@
 tools.py - All tool functions and schemas for the Autonomous Agent.
 """
 
-import subprocess
 import os
+import subprocess
+import sys
 import requests
 
 # Dynamic base directory
@@ -18,8 +19,13 @@ def run_shell(command: str) -> str:
     """Run a shell command and return output."""
     try:
         result = subprocess.run(
-            command, shell=True,
-            capture_output=True, text=True, timeout=30
+            command,
+            shell=True,
+            capture_output=True,
+            text=True,
+            timeout=30,
+            encoding="utf-8",
+            errors="replace"
         )
         output = (result.stdout + result.stderr).strip()
         return output if output else "Command ran with no output"
@@ -35,6 +41,8 @@ def read_file(path: str) -> str:
         abs_path = os.path.abspath(path)
         if not os.path.exists(abs_path):
             return f"Error: File not found: {path}"
+        if not os.path.isfile(abs_path):
+            return f"Error: Path is not a file: {path}"
         size = os.path.getsize(abs_path)
         if size > 100 * 1024:
             return f"Error: File too large ({size:,} bytes). Max is 100KB."
@@ -48,9 +56,11 @@ def write_file(path: str, content: str) -> str:
     """Write content to a file (creates parent dirs if needed)."""
     try:
         abs_path = os.path.abspath(path)
-        os.makedirs(os.path.dirname(abs_path), exist_ok=True)
+        parent_dir = os.path.dirname(abs_path)
+        if parent_dir:
+            os.makedirs(parent_dir, exist_ok=True)
         with open(abs_path, "w", encoding="utf-8") as f:
-            f.write(content)
+            f.write(str(content))
         return f"File written: {abs_path}"
     except Exception as e:
         return f"Error writing file: {str(e)}"
@@ -60,8 +70,11 @@ def append_file(path: str, content: str) -> str:
     """Append content to end of a file."""
     try:
         abs_path = os.path.abspath(path)
+        parent_dir = os.path.dirname(abs_path)
+        if parent_dir:
+            os.makedirs(parent_dir, exist_ok=True)
         with open(abs_path, "a", encoding="utf-8") as f:
-            f.write(content)
+            f.write(str(content))
         return f"Content appended to: {abs_path}"
     except Exception as e:
         return f"Error appending: {str(e)}"
@@ -71,6 +84,10 @@ def list_directory(path: str = ".") -> str:
     """List files and folders in a directory."""
     try:
         abs_path = os.path.abspath(path)
+        if not os.path.exists(abs_path):
+            return f"Error: Directory not found: {path}"
+        if not os.path.isdir(abs_path):
+            return f"Error: Path is not a directory: {path}"
         entries = sorted(os.listdir(abs_path))
         if not entries:
             return f"Directory is empty: {abs_path}"
@@ -80,8 +97,11 @@ def list_directory(path: str = ".") -> str:
             if os.path.isdir(full):
                 lines.append(f"  [DIR]  {entry}/")
             else:
-                size = os.path.getsize(full)
-                lines.append(f"  [FILE] {entry}  ({size:,} bytes)")
+                try:
+                    size = os.path.getsize(full)
+                    lines.append(f"  [FILE] {entry}  ({size:,} bytes)")
+                except OSError:
+                    lines.append(f"  [FILE] {entry}")
         return f"Contents of {abs_path}:\n" + "\n".join(lines)
     except Exception as e:
         return f"Error listing directory: {str(e)}"
@@ -92,11 +112,14 @@ def execute_code(code: str) -> str:
     temp_file = os.path.join(BASE_DIR, "_temp_exec.py")
     try:
         with open(temp_file, "w", encoding="utf-8") as f:
-            f.write(code)
+            f.write(str(code))
         result = subprocess.run(
-            f'python "{temp_file}"',
-            shell=True, capture_output=True,
-            text=True, timeout=30
+            [sys.executable, temp_file],
+            capture_output=True,
+            text=True,
+            timeout=30,
+            encoding="utf-8",
+            errors="replace"
         )
         output = (result.stdout + result.stderr).strip()
         return output if output else "Code executed with no output"
@@ -106,7 +129,10 @@ def execute_code(code: str) -> str:
         return f"Error: {str(e)}"
     finally:
         if os.path.exists(temp_file):
-            os.remove(temp_file)
+            try:
+                os.remove(temp_file)
+            except OSError:
+                pass
 
 
 def do_search(query: str) -> str:
@@ -114,7 +140,7 @@ def do_search(query: str) -> str:
     try:
         api_key = os.environ.get("SERPER_API_KEY")
         if not api_key:
-            return "Error: SERPER_API_KEY not set"
+            return "Error: SERPER_API_KEY not set in environment or .env file"
         resp = requests.post(
             "https://google.serper.dev/search",
             headers={"X-API-KEY": api_key, "Content-Type": "application/json"},
@@ -138,9 +164,12 @@ def install_package(package: str) -> str:
     """Install a Python package via pip."""
     try:
         result = subprocess.run(
-            f"pip install {package}",
-            shell=True, capture_output=True,
-            text=True, timeout=120
+            [sys.executable, "-m", "pip", "install", package],
+            capture_output=True,
+            text=True,
+            timeout=120,
+            encoding="utf-8",
+            errors="replace"
         )
         output = (result.stdout + result.stderr).strip()
         return output if output else f"Installed: {package}"
@@ -151,11 +180,21 @@ def install_package(package: str) -> str:
 def git_commit(message: str) -> str:
     """Stage all changes and commit."""
     try:
-        # Use subprocess instead of gitpython to avoid extra dependency
-        subprocess.run(["git", "add", "-A"], cwd=BASE_DIR, capture_output=True, text=True)
+        subprocess.run(
+            ["git", "add", "-A"],
+            cwd=BASE_DIR,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace"
+        )
         result = subprocess.run(
-            ["git", "commit", "-m", message],
-            cwd=BASE_DIR, capture_output=True, text=True
+            ["git", "commit", "-m", str(message)],
+            cwd=BASE_DIR,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace"
         )
         output = (result.stdout + result.stderr).strip()
         return output if output else f"Committed: {message}"
