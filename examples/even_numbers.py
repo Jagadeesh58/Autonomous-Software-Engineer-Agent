@@ -1,5 +1,5 @@
 """
-even_numbers.py - Generate and print even numbers.
+even_numbers.py - Generate and display even numbers.
 """
 
 
@@ -9,4 +9,5 @@ def get_even_numbers(n: int) -> list:
 
 
 if __name__ == "__main__":
-    print(get_even_numbers(10))
+    evens = get_even_numbers(20)
+    print(f"Even numbers up to 20: {evens}")
